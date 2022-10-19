@@ -21,7 +21,7 @@ class UserProfile(models.Model):
 		ordering = ['user']
 
 	def __str__(self):
-		return self.firstname + " " + self.lastname
+		return f"{self.firstname} {self.lastname}"
 
 # ================================
 #    Models related to the data  
@@ -43,7 +43,7 @@ class DataSet(models.Model):
 		unique_together = ('category', 'seriesNumber')
 
 	def __str__(self):
-		return self.category + "-" + self.seriesNumber + " - " + self.name
+		return f"{self.category}-{self.seriesNumber} - {self.name}"
 
 class DataPatch(models.Model):
 	dataSet = models.ForeignKey(DataSet, on_delete = models.CASCADE)
@@ -122,7 +122,7 @@ class DataProperty(models.Model):
 		ordering = ("dataFile", "metadata")
 
 	def __str__(self):
-		return self.dataFile.__str__() + " - " + self.metadata.name
+		return f"{self.dataFile.__str__()} - {self.metadata.name}"
 
 # class DataProp(models.Model):
 # 	dataFile = models.OneToOneField(DataFile, on_delete = models.CASCADE, related_name = "proptofile")
@@ -186,4 +186,4 @@ class Log(models.Model):
 		unique_together = ('logType', 'logNum')
 
 	def __str__(self):
-		return self.logType + " #" + str(self.logNum) + " - " + str(self.publicationDate)
+		return f"{self.logType} #{str(self.logNum)} - {str(self.publicationDate)}"

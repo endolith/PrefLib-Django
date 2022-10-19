@@ -26,19 +26,19 @@ class Command(BaseCommand):
 		try:
 			# Initializing a new log
 			newLogNum = Log.objects.filter(logType = "zip").aggregate(Max('logNum'))['logNum__max']
-			if newLogNum == None:
+			if newLogNum is None:
 				newLogNum = 0
 			else:
 				newLogNum += 1
 
 			# Starting the log
-			log = ["<h4> Zipping log #" + str(newLogNum) + " - " + str(timezone.now()) + "</h4>\n"]
+			log = [f"<h4> Zipping log #{newLogNum} - {str(timezone.now())}" + "</h4>\n"]
 			startTime = timezone.now()
 
 			# We start by zipping the data sets
 			log.append("<p>Zipping data sets...</p>\n<ul>\n")
 			for ds in DataSet.objects.all():
-				print("Zipping dataset " + str(ds))
+				print(f"Zipping dataset {str(ds)}")
 				log.append("\t<li>Zipping dataset " + str(ds) + "... ")
 				self.zipDataSet(ds, dataDir)
 				log.append(" ... done.</li>\n")
@@ -54,14 +54,17 @@ class Command(BaseCommand):
 			log.append("\n<p>Zipping data files by type</p>\n<ul>\n")
 			for dataType in DataFile.objects.order_by().values('dataType').distinct():
 				dataType = dataType['dataType']
-				print("Zipping type " + dataType)
+				print(f"Zipping type {dataType}")
 				log.append("\t<li>Zipping type " + dataType + "... ")
 				self.zipType(dataType, dataDir)
 				log.append(" ... done.</li>\n")
-			log.append("</ul>\n<p>... done.</p>\n")
+			log.extend(
+				(
+					"</ul>\n<p>... done.</p>\n",
+					"\n<p>Regeneration of the zip files successfully completed in ",
+				)
+			)
 
-			# We finish the log
-			log.append("\n<p>Regeneration of the zip files successfully completed in ") 
 			log.append(str((timezone.now() - startTime).total_seconds() / 60) + " minutes</p>\n")
 
 			# And finally collect the statics
@@ -88,27 +91,31 @@ class Command(BaseCommand):
 		# First locate the dataset folder
 		dsDir = os.path.join(dataDir, ds.category, ds.abbreviation)
 		# Create the zip file for the dataset
-		zipf = zipfile.ZipFile(os.path.join(dsDir, ds.abbreviation + ".zip"), "w", zipfile.ZIP_DEFLATED)
+		zipf = zipfile.ZipFile(
+			os.path.join(dsDir, f"{ds.abbreviation}.zip"), "w", zipfile.ZIP_DEFLATED
+		)
 
-		# Re-create the info file based on the details in the database
-		infoFile = open(os.path.join(dsDir, "info.txt"), "w")
-		infoFile.write("Name: " + ds.name + "\n\n")
-		infoFile.write("Abbreviation: " + ds.abbreviation + "\n\n")
-		infoFile.write("Category: " + ds.category + "\n\n")
-		infoFile.write("Series Number: " + ds.seriesNumber + "\n\n")
-		infoFile.write("Path: " + ds.category + "/" + ds.abbreviation + "\n\n")
-		infoFile.write("Description: " + ds.description + "\n\n")
-		infoFile.write("Required Citations: " + ds.requiredCitations + "\n\n")
-		infoFile.write("Selected Studies: " + ds.selectedStudies + "\n\n")
-		infoFile.write("description, status, file_name\n")
 
-		# Add all the files to the zip archive and their info in the info file
-		for df in DataFile.objects.filter(dataPatch__dataSet = ds):
-			zipf.write(os.path.join(dsDir, df.fileName), df.fileName)
-			infoFile.write(df.dataPatch.description + ", " + df.modificationType + ", " + df.fileName + "\n")
+		with open(os.path.join(dsDir, "info.txt"), "w") as infoFile:
+			infoFile.write(f"Name: {ds.name}" + "\n\n")
+			infoFile.write(f"Abbreviation: {ds.abbreviation}" + "\n\n")
+			infoFile.write(f"Category: {ds.category}" + "\n\n")
+			infoFile.write(f"Series Number: {ds.seriesNumber}" + "\n\n")
+			infoFile.write(f"Path: {ds.category}/{ds.abbreviation}" + "\n\n")
+			infoFile.write(f"Description: {ds.description}" + "\n\n")
+			infoFile.write(f"Required Citations: {ds.requiredCitations}" + "\n\n")
+			infoFile.write(f"Selected Studies: {ds.selectedStudies}" + "\n\n")
+			infoFile.write("description, status, file_name\n")
 
-		# Add the info.txt file to the archive
-		infoFile.close()
+				# Add all the files to the zip archive and their info in the info file
+			for df in DataFile.objects.filter(dataPatch__dataSet = ds):
+				zipf.write(os.path.join(dsDir, df.fileName), df.fileName)
+				infoFile.write(
+					f"{df.dataPatch.description}, {df.modificationType}, {df.fileName}"
+					+ "\n"
+				)
+
+
 		zipf.write(os.path.join(dsDir, "info.txt"), "info.txt")
 
 		# Closing the archive
@@ -116,7 +123,12 @@ class Command(BaseCommand):
 
 	# Function to zip a type of data
 	def zipType(self, dataType, dataDir):
-		zipf = zipfile.ZipFile(os.path.join(dataDir, "types", dataType + ".zip"), "w", zipfile.ZIP_DEFLATED)
+		zipf = zipfile.ZipFile(
+			os.path.join(dataDir, "types", f"{dataType}.zip"),
+			"w",
+			zipfile.ZIP_DEFLATED,
+		)
+
 		for df in DataFile.objects.filter(dataType = dataType):
 			zipf.write(os.path.join(dataDir, df.dataPatch.dataSet.category, df.dataPatch.dataSet.abbreviation, 
 				df.fileName), df.fileName)

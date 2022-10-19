@@ -40,15 +40,14 @@ def getPaginator(request, iterable, pageSize = 20, windowSize = 3, maxNumberPage
 		paginated = paginator.page(1)
 	except EmptyPage:
 		paginated = paginator.page(paginator.num_pages)
-	# Compute pages before and after the current one     
+	# Compute pages before and after the current one
 	if paginator.num_pages > maxNumberPages + 1:
 		pagesBefore = []
 		if page - windowSize > 1:
 			pagesBefore.append(1)
 		if page - windowSize > 2:
 			pagesBefore.append("...")
-		for p in range(max(1, page - windowSize), page):
-			pagesBefore.append(p)
+		pagesBefore.extend(iter(range(max(1, page - windowSize), page)))
 		pagesAfter = list(range(page + 1, min(page + windowSize + 1, paginator.num_pages + 1)))
 		if page + windowSize < paginator.num_pages - 1:
 			pagesAfter.append("...")
@@ -133,7 +132,13 @@ def dataset(request, datacategory, dataSetNum):
 	if totalSize != None:
 		totalSize = round(totalSize / 1000, 2)
 	allTypes = allFiles.order_by('dataType').values_list('dataType').distinct()
-	zipfilepath = os.path.join('data', datacategory, str(dataset.abbreviation), str(dataset.abbreviation) + '.zip')
+	zipfilepath = os.path.join(
+		'data',
+		datacategory,
+		str(dataset.abbreviation),
+		f'{str(dataset.abbreviation)}.zip',
+	)
+
 	return my_render(request, os.path.join('preflib', 'dataset.html'), locals())
 
 def datapatch(request, datacategory, dataSetNum, dataPatchNum):
@@ -145,14 +150,14 @@ def datapatch(request, datacategory, dataSetNum, dataPatchNum):
 	for file in dataFiles:
 		tmp = []
 		for (category, metadata) in metadataPerCategories:
-			tmp2 = []
-			for m in metadata:
-				if DataProperty.objects.filter(metadata = m, dataFile = file).exists():
-					tmp2.append((m, DataProperty.objects.get(metadata = m, dataFile = file).getTypedValue()))
-			if len(tmp2) > 0:
+			if tmp2 := [
+				(m, DataProperty.objects.get(metadata=m, dataFile=file).getTypedValue())
+				for m in metadata
+				if DataProperty.objects.filter(metadata=m, dataFile=file).exists()
+			]:
 				tmp.append((category, tmp2))
 		filesAndMetadata.append((file, tmp))
-	
+
 	return my_render(request, os.path.join('preflib', 'datapatch.html'), locals())
 
 def datatypes(request):
@@ -165,7 +170,7 @@ def dataSearch(request):
 	types.remove(('csv', 'comma-separated values'))
 	allMetadata = Metadata.objects.filter(isActive = True, isDisplayed = True)
 
-	metadataSliderValues = dict()
+	metadataSliderValues = {}
 	removeMetadata = []
 	# We compute the max and min values of the slider for each metadata
 	for m in allMetadata:
@@ -182,44 +187,65 @@ def dataSearch(request):
 		allMetadata = allMetadata.exclude(pk = m.pk)
 
 	# This is to save the POST data when we change to a different page of the results
-	if request.method != 'POST' and 'page' in request.GET:
-		if 'searchDataFilesPOST' in request.session:
-			request.POST = request.session['searchDataFilesPOST']
-			request.method = 'POST'
+	if (
+		request.method != 'POST'
+		and 'page' in request.GET
+		and 'searchDataFilesPOST' in request.session
+	):
+		request.POST = request.session['searchDataFilesPOST']
+		request.method = 'POST'
 
 	allFiles = DataFile.objects.filter(dataType__in = [t[0] for t in types])
 	if request.method == 'POST':
 		request.session['searchDataFilesPOST'] = request.POST
-	
+
 		categoryFilter = [cat[0] for cat in categories]
 		for cat in categories:	
-			if request.POST.get(cat[0] + 'selector') == "no":
+			if request.POST.get(f'{cat[0]}selector') == "no":
 				if cat[0] in categoryFilter: categoryFilter.remove(cat[0])
-			elif request.POST.get(cat[0] + 'selector') == "yes":
+			elif request.POST.get(f'{cat[0]}selector') == "yes":
 				categoryFilter = [c for c in categoryFilter if c == cat[0]]
 		allFiles = allFiles.filter(dataPatch__dataSet__category__in = categoryFilter)
 
 		dataTypeFilter = [t[0] for t in types]
 		for t in types:
-			if request.POST.get(t[0] + 'selector') == "no":
+			if request.POST.get(f'{t[0]}selector') == "no":
 				if t[0] in dataTypeFilter: dataTypeFilter.remove(t[0])
-			elif request.POST.get(t[0] + 'selector') == "yes":
+			elif request.POST.get(f'{t[0]}selector') == "yes":
 				dataTypeFilter = [x for x in dataTypeFilter if x == t[0]]
 		allFiles = allFiles.filter(dataType__in = dataTypeFilter)
 
 		for m in allMetadata:
 			if m.searchWidget == "ternary":
-				if request.POST.get(m.shortName + 'selector') == "no":
+				if request.POST.get(f'{m.shortName}selector') == "no":
 					propretyQuery = DataProperty.objects.filter(metadata = m, value = True)
 					allFiles = allFiles.exclude(dataproperty__in = models.Subquery(propretyQuery.values('pk')))
-				elif request.POST.get(m.shortName + 'selector') == "yes":
+				elif request.POST.get(f'{m.shortName}selector') == "yes":
 					propretyQuery = DataProperty.objects.filter(metadata = m, value = True)
 					allFiles = allFiles.filter(dataproperty__in = models.Subquery(propretyQuery.values('pk')))
 
 			elif m.searchWidget == "range":
-				propretyQueryMin = DataProperty.objects.filter(metadata = m).annotate(floatValue = Cast('value', models.FloatField())).filter(floatValue__lt = float(request.POST.get(m.shortName + 'SliderValueMin')))
+				propretyQueryMin = (
+					DataProperty.objects.filter(metadata=m)
+					.annotate(floatValue=Cast('value', models.FloatField()))
+					.filter(
+						floatValue__lt=float(
+							request.POST.get(f'{m.shortName}SliderValueMin')
+						)
+					)
+				)
+
 				allFiles = allFiles.exclude(dataproperty__in = models.Subquery(propretyQueryMin.values('pk')))
-				propretyQueryMax = DataProperty.objects.filter(metadata = m).annotate(floatValue = Cast('value', models.FloatField())).filter(floatValue__gt = float(request.POST.get(m.shortName + 'SliderValueMax')))
+				propretyQueryMax = (
+					DataProperty.objects.filter(metadata=m)
+					.annotate(floatValue=Cast('value', models.FloatField()))
+					.filter(
+						floatValue__gt=float(
+							request.POST.get(f'{m.shortName}SliderValueMax')
+						)
+					)
+				)
+
 
 				allFiles = allFiles.exclude(dataproperty__in = models.Subquery(propretyQueryMax.values('pk')))
 
@@ -268,13 +294,12 @@ def userLogin(request):
 			# If the form is valid, try to authenticate the user
 			username = form.cleaned_data["username"]
 			password = form.cleaned_data["password"]
-			user = authenticate(username = username, password = password) 
-			if user:
+			if user := authenticate(username=username, password=password):
 				# If the authentication is right, login the user and redirect to the next page if there is one
 				login(request, user)
 				if next:
 					return HttpResponseRedirect(next)
-			else: 
+			else:
 				# Else there have been an error during the login
 				error = True
 	else:
@@ -284,8 +309,7 @@ def userLogin(request):
 def userLogout(request):
 	if not request.user.is_authenticated:
 		raise Http404
-	if request.user.is_authenticated:
-		logout(request)
+	logout(request)
 	return redirect('preflibapp:main')
 
 def userProfile(request):
@@ -320,10 +344,12 @@ def adminNews(request):
 		if form.is_valid():
 			now = timezone.now()
 			News.objects.create(
-				title = form.cleaned_data['title'],
-				text = form.cleaned_data['text'],
-				publicationDate = str(now.year) + '-' + str(now.month) + '-' + str(now.day),
-				author = request.user)
+				title=form.cleaned_data['title'],
+				text=form.cleaned_data['text'],
+				publicationDate=f'{str(now.year)}-{str(now.month)}-{str(now.day)}',
+				author=request.user,
+			)
+
 			created = True
 	else:
 		form = NewsForm()
@@ -353,20 +379,19 @@ def adminZip(request):
 		raise Http404
 
 	logs = Log.objects.filter(logType = "zip")
-	if len(logs) > 0:
-		log = logs.latest("publicationDate")
-	else:
-		log = None
-
-	if request.method == "POST":
-		if "zip" in request.POST and request.POST['zip'] == "True":
-			if finders.find(os.path.join("data", "zip.lock")) == None:
-				threaded_management_command("generateZipFiles")
-				launchedText = """The script regenerating the zip files has been launched, it will take several 
+	log = logs.latest("publicationDate") if len(logs) > 0 else None
+	if (
+		request.method == "POST"
+		and "zip" in request.POST
+		and request.POST['zip'] == "True"
+	):
+		if finders.find(os.path.join("data", "zip.lock")) is None:
+			threaded_management_command("generateZipFiles")
+			launchedText = """The script regenerating the zip files has been launched, it will take several 
 				minutes to complete, come here to see the log once it will be available. You will be redirected 
 				in 5 seconds to the admin panel."""
-			else:
-				launchedText = """The script regenerating the zip files <strong>has not been launched</strong>, another is already 
+		else:
+			launchedText = """The script regenerating the zip files <strong>has not been launched</strong>, another is already 
 				running. You will be redirected in 5 seconds to the admin panel."""
 
 	return my_render(request, os.path.join('preflib', 'adminzip.html'), locals())
@@ -376,23 +401,21 @@ def adminAddDataset(request):
 		raise Http404
 
 	logs = Log.objects.filter(logType = "dataset")
-	if len(logs) > 0:
-		log = logs.latest("publicationDate")
-	else:
-		log = None
-
+	log = logs.latest("publicationDate") if len(logs) > 0 else None
 	if request.method == "POST":
-		if finders.find(os.path.join("datatoadd", "dataset.lock")) == None:
+		if finders.find(os.path.join("datatoadd", "dataset.lock")) is None:
 			args = []
 			if "all" in request.POST:
 				dataDir = finders.find("datatoadd/")
-				for filename in os.listdir(dataDir):
-					if filename.endswith(".zip"):
-						args.append(str(filename))
+				args.extend(
+					str(filename)
+					for filename in os.listdir(dataDir)
+					if filename.endswith(".zip")
+				)
+
 			else:
-				for zipFile in request.POST.getlist('dataset'):
-					args.append(str(zipFile))
-			if len(args) == 0:
+				args.extend(str(zipFile) for zipFile in request.POST.getlist('dataset'))
+			if not args:
 				launchedText = """The script adding datasets <strong>has not been launched</strong>, you have not selected any 
 				dataset to be added. Please select at least one."""
 				noArgs = True
@@ -405,10 +428,12 @@ def adminAddDataset(request):
 			running. You will be redirected in 5 seconds to the admin panel."""
 	else:
 		dataDir = finders.find("datatoadd")
-		files = []
-		for filename in os.listdir(dataDir):
-			if filename.endswith(".zip"):
-				files.append((filename, os.path.getsize(os.path.join(dataDir, filename)) / 1000))
+		files = [
+			(filename, os.path.getsize(os.path.join(dataDir, filename)) / 1000)
+			for filename in os.listdir(dataDir)
+			if filename.endswith(".zip")
+		]
+
 		files.sort()
 
 	return my_render(request, os.path.join('preflib', 'adminadddataset.html'), locals())

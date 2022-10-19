@@ -35,7 +35,7 @@ class Command(BaseCommand):
 		try:
 			# Initializing the log
 			newLogNum = Log.objects.filter(logType = "dataset").aggregate(Max('logNum'))['logNum__max']
-			if newLogNum == None:
+			if newLogNum is None:
 				newLogNum = 0
 			else:
 				newLogNum += 1
@@ -44,8 +44,8 @@ class Command(BaseCommand):
 			dataDir = finders.find("data")
 			if not dataDir:
 				try:
-					os.makedirs(dataToAddDir[0:-9] + "data")
-					dataDir = dataToAddDir[0:-9] + "data"
+					os.makedirs(f"{dataToAddDir[:-9]}data")
+					dataDir = f"{dataToAddDir[:-9]}data"
 				except Exception as e:
 					pass
 
@@ -57,7 +57,7 @@ class Command(BaseCommand):
 				pass
 
 			# Starting the log
-			log = ["<h4> Adding dataset #" + str(newLogNum) + " - " + str(timezone.now()) + "</h4>\n"]
+			log = [f"<h4> Adding dataset #{newLogNum} - {str(timezone.now())}" + "</h4>\n"]
 			log.append("<ul>\n\t<li>args : " + str(args) + "</li>\n\t<li>options : " + str(options) + 
 				"</li>\n</ul>\n")
 
@@ -77,7 +77,7 @@ class Command(BaseCommand):
 				if fileName.endswith('.zip'):
 					# Let's work on the dataset
 					fileName = fileName.split(os.path.sep)[-1]
-					print("Dataset " + str(fileName))
+					print(f"Dataset {str(fileName)}")
 					log.append("\n\t<li>Dataset " + str(fileName) + "... ")
 					try:
 						# Actually adding the dataset
@@ -97,9 +97,10 @@ class Command(BaseCommand):
 
 			# Finalizing the log
 			log.append("</ul>\n<p>The datasets have been successfully added in ")
-			log.append(str((timezone.now() - startTime).total_seconds() / 60))
-			log.append(" minutes.</p>")
-			
+			log.extend(
+				(str((timezone.now() - startTime).total_seconds() / 60), " minutes.</p>")
+			)
+
 			# Collecting the statics once everything has been done
 			print("Finished, collecting statics")
 			management.call_command("collectstatic", no_input = False)
@@ -120,42 +121,38 @@ class Command(BaseCommand):
 	# Function that reads the info file in the zip file to get the details of the dataset
 	def readInfoFile(self, fileName, tmpDir):
 		infos = {"datafiles": []}
-		file = open(fileName, 'r')
-		# We go line per line trying to match the beginning of the line to a known header
-		for line in file.readlines():
-			if len(line) > 1:
-				if line.startswith('Name:'):
-					infos['name'] = line[5:].strip()
-				elif line.startswith('Abbreviation:'):
-					infos['abb'] = line[13:].strip()
-				elif line.startswith('Category:'):
-					infos['cat'] = line[10:].strip()
-				elif line.startswith('Extension:'):
-					infos['cat'] = line[10:].strip()
-				elif line.startswith('Series Number:'):
-					infos['series'] = line[14:].strip()
-				elif line.startswith('Description:'):
-					infos['descr'] = line[12:].strip()
-				elif line.startswith('Required Citations:'):
-					infos['cite'] = line[19:].strip() if line[19:].strip() != "None" else ""
-				elif line.startswith('Selected Studies:'):
-					infos['studies'] = line[17:].strip() if line[17:].strip() != "None" else ""
-				elif line.startswith('description,status,file_name') or line.startswith('Path:'):
-					pass
-				# If it's not one the above header, it must be the list of the files contained in the
-				# dataset, we parse this here
-				else:
-					tmp = {}
-					tmpline = line.split(',')
-					tmp['descr'] = tmpline[0].strip()
-					tmp['status'] = tmpline[1].strip().lower()
-					tmp['fileName'] = tmpline[2].strip()
-					try:
-						tmp['size'] = os.path.getsize(os.path.join(tmpDir, tmpline[2].strip()))
-					except:
-						tmp['size'] = 0
-					infos["datafiles"].append(tmp)
-		file.close()
+		with open(fileName, 'r') as file:
+				# We go line per line trying to match the beginning of the line to a known header
+			for line in file:
+				if len(line) > 1:
+					if line.startswith('Name:'):
+						infos['name'] = line[5:].strip()
+					elif line.startswith('Abbreviation:'):
+						infos['abb'] = line[13:].strip()
+					elif line.startswith('Category:'):
+						infos['cat'] = line[10:].strip()
+					elif line.startswith('Extension:'):
+						infos['cat'] = line[10:].strip()
+					elif line.startswith('Series Number:'):
+						infos['series'] = line[14:].strip()
+					elif line.startswith('Description:'):
+						infos['descr'] = line[12:].strip()
+					elif line.startswith('Required Citations:'):
+						infos['cite'] = line[19:].strip() if line[19:].strip() != "None" else ""
+					elif line.startswith('Selected Studies:'):
+						infos['studies'] = line[17:].strip() if line[17:].strip() != "None" else ""
+					elif not line.startswith(
+						'description,status,file_name'
+					) and not line.startswith('Path:'):
+						tmpline = line.split(',')
+						tmp = {'descr': tmpline[0].strip()}
+						tmp['status'] = tmpline[1].strip().lower()
+						tmp['fileName'] = tmpline[2].strip()
+						try:
+							tmp['size'] = os.path.getsize(os.path.join(tmpDir, tmpline[2].strip()))
+						except:
+							tmp['size'] = 0
+						infos["datafiles"].append(tmp)
 		return infos
 
 	# All the details of adding a dataset
@@ -172,9 +169,12 @@ class Command(BaseCommand):
 				infos = self.readInfoFile(os.path.join(tmpDir, fileName), tmpDir)
 				os.remove(os.path.join(tmpDir, fileName))
 				break
-		if infos == None:
-			raise Exception("No info.txt file has been found for " + str(zipfileName) + " ... skipping it.")
-	
+		if infos is None:
+			raise Exception(
+				f"No info.txt file has been found for {str(zipfileName)} ... skipping it."
+			)
+
+
 		# Now that we have all the infos, we can create the dataset object in the database
 		datasetObj = DataSet.objects.update_or_create(
 			category = infos['cat'],
@@ -205,14 +205,12 @@ class Command(BaseCommand):
 			if isAChoice(DATATYPES, fileName.split('.')[-1]):
 				# Move the file to the folder of the dataset
 				os.rename(os.path.join(tmpDir, fileName), os.path.join(dataDir, infos['cat'], infos['abb'], fileName))
-				# Looking through the infos we collected to see if the file appears there
-				infoFile = None
-				for i in infos["datafiles"]:
-					if i['fileName'] == fileName:
-						infoFile = i
-						break
+				infoFile = next(
+					(i for i in infos["datafiles"] if i['fileName'] == fileName), None
+				)
+
 				# If not, we proceed with default values and raise a warning
-				if infoFile == None:
+				if infoFile is None:
 					infoFile = {'descr': '-', 'status': '-', 
 						'size': os.path.getsize(os.path.join(dataDir, infos['cat'], infos['abb'], fileName))}
 					log.append("</li>\n</ul>\n<p><strong>No info has been for the file " + str(fileName) + 

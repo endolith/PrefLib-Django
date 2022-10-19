@@ -6,10 +6,11 @@ import itertools
 
 def hasCondorcet(instance):
 	if instance.dataType in ["tog", "wmg", "mjg"]:
-		for n in instance.graph.dict:
-			if len(instance.graph.neighbours(n)) == len(instance.graph.dict) - 1:
-				return True
-		return False
+		return any(
+			len(instance.graph.neighbours(n)) == len(instance.graph.dict) - 1
+			for n in instance.graph.dict
+		)
+
 	if instance.dataType == "pwg":
 		for n in instance.graph.dict:
 			canBeCondorcet = True
@@ -37,10 +38,10 @@ def nbDifferentOrders(instance):
 	return instance.nbDifferentOrders
 	
 def largestBallot(instance):
-	return max([sum([len(p) for p in o]) for o in instance.orders])
+	return max(sum(len(p) for p in o) for o in instance.orders)
 
 def smallestBallot(instance):
-	return min([sum([len(p) for p in o]) for o in instance.orders])
+	return min(sum(len(p) for p in o) for o in instance.orders)
 
 def maxNbIndif(instance):
 	return max([len([p for p in o if len(p) > 1]) for o in instance.orders] + [0])
@@ -55,7 +56,7 @@ def smallestIndif(instance):
 	return min([len(p) for o in instance.orders for p in o if len(p) > 0] + [instance.nbAlternatives])
 
 def isApproval(instance):
-	m = max([len(o) for o in instance.orders])
+	m = max(len(o) for o in instance.orders)
 	if m == 1:
 		return True
 	elif m == 2:
@@ -89,10 +90,7 @@ def isSP(instance):
 	g = Glucose3()
 	num_rows = len(matrix)
 	num_cols = len(matrix[0])
-	if num_cols <= 10:
-		cols = range(num_cols)
-	else:
-		cols = range(10)
+	cols = range(num_cols) if num_cols <= 10 else range(10)
 	while True:
 		# transitivity
 		for x, y, z in itertools.combinations(cols, 3):

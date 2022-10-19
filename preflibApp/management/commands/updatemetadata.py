@@ -34,29 +34,33 @@ class Command(BaseCommand):
 		try:
 			# Initialize a new log
 			newLogNum = Log.objects.filter(logType = "metadata").aggregate(Max('logNum'))['logNum__max']
-			if newLogNum == None:
+			if newLogNum is None:
 				newLogNum = 0
 			else:
 				newLogNum += 1
 
 			# Either the datasets have been specified or we run through all of them
-			if options["dataset"] == None:
+			if options["dataset"] is None:
 				datafiles = list(DataFile.objects.all().order_by("fileName"))
 				shuffle(datafiles)
 			else:
 				datafiles = DataFile.objects.filter(dataPatch__dataSet__abbreviation__in = options["dataset"]).order_by("fileName")
 
 			# Starting the real stuff
-			log = ["<h4> Updating the metadata #" + str(newLogNum) + " - " + str(timezone.now()) + "</h4>\n<p><ul>"]
+			log = [
+				f"<h4> Updating the metadata #{newLogNum} - {str(timezone.now())}"
+				+ "</h4>\n<p><ul>"
+			]
+
 			startTime = timezone.now()
 			for dataFile in datafiles:
 				print("\nData file " + str(dataFile.fileName) + "...")
 				log.append("\n\t<li>Data file " + str(dataFile.fileName) + "... ")
 				self.updateDataProp(dataFile, noDrawing = options['noDrawing'])
 				log.append(" ... done.</li>\n")
-			
+
 			# Closing the log
-			log.append("\n<p>Metadata updated in ") 
+			log.append("\n<p>Metadata updated in ")
 			log.append(str((timezone.now() - startTime).total_seconds() / 60) + " minutes</p>\n")
 
 			# Collecting statics at the end
@@ -67,7 +71,7 @@ class Command(BaseCommand):
 			# If an exception occured during runtime, we log it and continue
 			log.append("\n</ul>\n<p><strong>" + str(e) + "<br>\n" + str(traceback.format_exc()) + "</strong></p>")
 			print(traceback.format_exc())
-			print("Exception " + str(e))
+			print(f"Exception {str(e)}")
 
 		finally:
 			# In any cases, we remove the lock and save the log
@@ -93,8 +97,19 @@ class Command(BaseCommand):
 				pass
 			preflibInstance.draw(os.path.join(folder, 'img', dataFile.fileName.replace('.', '_') + '.png'))
 			# NEXT LINE IS TERRIBLE!!!
-			os.system(settings.CONVERT_PATH + " " + os.path.join(folder, 'img', dataFile.fileName.replace('.', '_') + '.png') + 
-			" -trim " + os.path.join(folder, 'img', dataFile.fileName.replace('.', '_') + '.png'))
+			os.system(
+				(
+					f"{settings.CONVERT_PATH} "
+					+ os.path.join(
+						folder, 'img', dataFile.fileName.replace('.', '_') + '.png'
+					)
+					+ " -trim "
+				)
+				+ os.path.join(
+					folder, 'img', dataFile.fileName.replace('.', '_') + '.png'
+				)
+			)
+
 			dataFile.image = dataFile.fileName.replace('.', '_') + '.png'
 		dataFile.save()
 		# Selecting only the active metadata
@@ -103,9 +118,14 @@ class Command(BaseCommand):
 			if dataFile.dataType in m.getAppliesToList():
 				# If the metadata applies to the datafile we compute its value and save it
 				dataPropObject, status = DataProperty.objects.update_or_create(
-					dataFile = dataFile, 
-					metadata = m,
-					defaults = {
-						"value": getattr(importlib.import_module("preflibApp." + m.innerModule), m.innerFunction)(preflibInstance)
-					})
+					dataFile=dataFile,
+					metadata=m,
+					defaults={
+						"value": getattr(
+							importlib.import_module(f"preflibApp.{m.innerModule}"),
+							m.innerFunction,
+						)(preflibInstance)
+					},
+				)
+
 				dataPropObject.save()

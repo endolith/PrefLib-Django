@@ -33,19 +33,15 @@ class CreateUserForm(forms.Form):
 		email = cleaned_data.get('email')
 		username = cleaned_data.get('username')
 
-		# Check if password are same
-		if (pass1 == pass2):
-			# Check if the email is not already used
-			if (User.objects.filter(email = email).exists()):
-				raise forms.ValidationError("There is already an user using the email address !")
-			else:
-				# Check if the user name id not already used
-				if (User.objects.filter(username = username).exists()):
-					raise forms.ValidationError("This username is already used by some other user !")
-				else:
-					return cleaned_data
-		else:
+		if pass1 != pass2:
 			raise forms.ValidationError("The two passwords should be the same !")
+		if (User.objects.filter(email = email).exists()):
+			raise forms.ValidationError("There is already an user using the email address !")
+		# Check if the user name id not already used
+		if (User.objects.filter(username = username).exists()):
+			raise forms.ValidationError("This username is already used by some other user !")
+		else:
+			return cleaned_data
 
 class EditProfileForm(forms.Form):
 	pass

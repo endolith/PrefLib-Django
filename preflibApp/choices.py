@@ -1,14 +1,8 @@
 def findChoiceValue(choices, key):
-	for (k, v) in choices:
-		if k == key:
-			return v
-	return None
+	return next((v for k, v in choices if k == key), None)
 
 def isAChoice(choices, choice):
-	for c in choices:
-		if c[0] == choice:
-			return True
-	return False
+	return any(c[0] == choice for c in choices)
 
 DATACATEGORY = [
 	('ED', 'election'),

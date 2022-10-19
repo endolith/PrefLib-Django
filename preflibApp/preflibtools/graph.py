@@ -1,7 +1,7 @@
 class Graph(object):
 	def __init__(self):
-		self.dict = dict()
-		self.weight = dict()
+		self.dict = {}
+		self.weight = {}
 
 	# Returns the neighbours of a given node
 	def neighbours(self, node):
@@ -31,10 +31,10 @@ class Graph(object):
 
 	# Returns the string used when printing the graph
 	def __str__(self):
-		res = "Graph with {} vertices and {} edges :\n".format(len(self.dict), len(self.edges()))
+		res = f"Graph with {len(self.dict)} vertices and {len(self.edges())} edges :\n"
 		for node in self.dict:
-			res += str(node) + ": "
+			res += f"{str(node)}: "
 			for edge in self.outgoingEdges(node):
-				res += str(edge) + " "
+				res += f"{str(edge)} "
 			res = res[:-1] + "\n"
 		return res[:-1]
